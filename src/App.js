@@ -1,81 +1,80 @@
-import { useState } from "react";
-import "./App.css";
+import React, { useState } from "react";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
-import ImageGenerationForm from "./components/ImageGenerationForm";
+import "./App.css";
 
-// import OpenAI from "openai";
-
-// const openAI = new OpenAI({
-//   apiKey: "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",
-//   dangerouslyAllowBrowser: true,
-// });
-
-function App() {
+const App = () => {
+  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState(null);
   const [imgPrompt, setImgPrompt] = useState("");
-  const { transcript, browserSupportsSpeechRecognition } =
+  const [isListening, setIsListening] = useState(false);
+
+  const { transcript, browserSupportsSpeechRecognition, resetTranscript } =
     useSpeechRecognition();
+
   if (!browserSupportsSpeechRecognition) {
     return null;
   }
+
   const handleStartListening = async () => {
+    resetTranscript();
+    setIsListening(true);
     setImgPrompt("");
     await SpeechRecognition.startListening({
       continuous: true,
-      // language: "eng",
     });
   };
+
   const handleStopListening = async () => {
+    setIsListening(false);
     setImgPrompt(transcript);
-    SpeechRecognition.stopListening();
-    if (imgPrompt) {
-      // const response = await openAI.images.createVariation(
-      //   transcript,
-      //   4,
-      //   "512x512"
-      // );
-      // console.log(response);
-      console.log({
-        prompt: transcript,
-        n: 4,
-        size: "512x512",
-      });
-      const response = await fetch(
-        "https://api.openai.com/v1/images/generations",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer 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`,
-            "User-Agent": "Chrome",
-          },
-          body: JSON.stringify({
-            prompt: transcript,
-            n: 4,
-            size: "512x512",
-          }),
-        }
-      );
-      console.log(response);
+    await SpeechRecognition.stopListening();
+    setLoading(true);
+    console.log(transcript);
+
+    const response = await fetch(
+      "https://api-inference.huggingface.co/models/prompthero/openjourney",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer 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`,
+        },
+        body: JSON.stringify({ inputs: transcript }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to generate image");
     }
+
+    const blob = await response.blob();
+    setOutput(URL.createObjectURL(blob));
+    setLoading(false);
   };
 
   return (
-    <>
-      {/* <div>
-        <h1>Voice to Image Generator</h1>
-        <div id="text-box">{transcript}</div>
-        <div className="button-container">
+    <div>
+      <div className="button-container">
+        {isListening ? (
+          <button onClick={() => handleStopListening()}>Stop Listening</button>
+        ) : (
           <button onClick={() => handleStartListening()}>
             Start Listening
           </button>
-          <button onClick={() => handleStopListening()}>Stop Listening</button>
-        </div>
-      </div> */}
-      <ImageGenerationForm />
-    </>
+        )}
+      </div>
+      <div>
+        {loading && <div className="loading">Loading...</div>}
+        {!loading && output && (
+          <div className="result-image">
+            <img src={output} alt="art" />
+          </div>
+        )}
+      </div>
+    </div>
   );
-}
+};
 
 export default App;
